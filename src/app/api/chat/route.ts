@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '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'
+// API key from environment only - NEVER hardcoded
+const getApiKey = () => {
+  const key = process.env.OPENROUTER_API_KEY
+  if (!key) {
+    throw new Error('OPENROUTER_API_KEY not configured')
+  }
+  return key
+}
 
 // Available FREE models on OpenRouter
 export const FREE_MODELS = [
@@ -69,7 +76,7 @@ async function handleSingleMode(message: string, history: ChatMessage[], model: 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${OPENROUTER_KEY}`,
+      'Authorization': `Bearer ${getApiKey()}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': 'https://guru-chat.vercel.app',
       'X-Title': 'Guru Chat'
@@ -111,7 +118,7 @@ async function handleVSMode(message: string, history: ChatMessage[], models: str
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          'Authorization': `Bearer ${getApiKey()}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://guru-chat.vercel.app',
           'X-Title': 'Guru Chat VS'
@@ -158,7 +165,7 @@ async function handleStackMode(message: string, history: ChatMessage[], models: 
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          'Authorization': `Bearer ${getApiKey()}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://guru-chat.vercel.app',
           'X-Title': 'Guru Chat Stack'
