@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// SiliconFlow API configuration
-const API_BASE_URL = 'https://api.siliconflow.cn/v1/chat/completions'
-
 // API key from environment only - NEVER hardcoded
 const getApiKey = () => {
-  const key = process.env.SILICONFLOW_API_KEY
+  const key = process.env.OPENROUTER_API_KEY
   if (!key) {
-    throw new Error('SILICONFLOW_API_KEY is not set. Please add it in the Vars section (settings button in top right).')
+    throw new Error('OPENROUTER_API_KEY is not set. Please add it in the Vars section (settings button in top right).')
+  }
+  // OpenRouter keys should start with sk-or-v1-
+  if (!key.startsWith('sk-or-')) {
+    throw new Error('Invalid API key format. OpenRouter keys should start with "sk-or-v1-". Please check your key at openrouter.ai/keys')
   }
   return key
 }
 
-// Available models on SiliconFlow
+// Available FREE models on OpenRouter
 export const FREE_MODELS = [
-  { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3', provider: 'DeepSeek', context: 64000 },
-  { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1', provider: 'DeepSeek', context: 64000 },
-  { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen 2.5 72B', provider: 'Alibaba', context: 131072 },
-  { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen Coder 32B', provider: 'Alibaba', context: 131072 },
-  { id: 'meta-llama/Meta-Llama-3.1-8B-Instruct', name: 'Llama 3.1 8B', provider: 'Meta', context: 131072 },
-  { id: 'meta-llama/Meta-Llama-3.1-70B-Instruct', name: 'Llama 3.1 70B', provider: 'Meta', context: 131072 },
-  { id: 'google/gemma-2-9b-it', name: 'Gemma 2 9B', provider: 'Google', context: 8192 },
-  { id: 'mistralai/Mistral-7B-Instruct-v0.2', name: 'Mistral 7B', provider: 'Mistral', context: 32768 },
-  { id: 'THUDM/glm-4-9b-chat', name: 'GLM-4 9B', provider: 'Zhipu', context: 128000 },
-  { id: 'internlm/internlm2_5-7b-chat', name: 'InternLM 2.5 7B', provider: 'Shanghai AI Lab', context: 32768 },
+  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', provider: 'DeepSeek', context: 64000 },
+  { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', provider: 'DeepSeek', context: 64000 },
+  { id: 'qwen/qwen-2.5-72b-instruct', name: 'Qwen 2.5 72B', provider: 'Alibaba', context: 131072 },
+  { id: 'qwen/qwen-2.5-coder-32b-instruct', name: 'Qwen Coder 32B', provider: 'Alibaba', context: 131072 },
+  { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B', provider: 'Meta', context: 131072 },
+  { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B', provider: 'Meta', context: 131072 },
+  { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash', provider: 'Google', context: 1048576 },
+  { id: 'google/gemma-2-9b-it:free', name: 'Gemma 2 9B', provider: 'Google', context: 8192 },
+  { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B', provider: 'Mistral', context: 32768 },
+  { id: 'huggingfaceh4/zephyr-7b-beta:free', name: 'Zephyr 7B', provider: 'HuggingFace', context: 4096 },
 ]
 
 interface ChatMessage {
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Handle different request formats
     const currentMessage = message || prompt
     const conversationHistory: ChatMessage[] = messages || []
-    const selectedModel = model || 'deepseek-ai/DeepSeek-V3'
+    const selectedModel = model || 'deepseek/deepseek-chat'
     
     if (!currentMessage && conversationHistory.length === 0) {
       return NextResponse.json({ success: false, error: 'Message required' }, { status: 400 })
@@ -76,11 +77,13 @@ async function handleSingleMode(message: string, history: ChatMessage[], model: 
     ...(message ? [{ role: 'user' as const, content: message.slice(0, 4000) }] : [])
   ]
 
-  const res = await fetch(API_BASE_URL, {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${getApiKey()}`,
       'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://guru-chat.vercel.app',
+      'X-Title': 'Guru Chat'
     },
     body: JSON.stringify({
       model,
@@ -92,13 +95,11 @@ async function handleSingleMode(message: string, history: ChatMessage[], model: 
 
   if (!res.ok) {
     const err = await res.text()
-    let errorMessage = `SiliconFlow API error (${res.status})`
+    let errorMessage = `OpenRouter API error (${res.status})`
     try {
       const errorData = JSON.parse(err)
       if (errorData.error?.message) {
         errorMessage = errorData.error.message
-      } else if (errorData.message) {
-        errorMessage = errorData.message
       }
     } catch {
       errorMessage = err || errorMessage
@@ -106,9 +107,9 @@ async function handleSingleMode(message: string, history: ChatMessage[], model: 
     
     // Provide helpful messages for common errors
     if (res.status === 401) {
-      errorMessage = 'Invalid API key. Please check your SILICONFLOW_API_KEY is correct and active at siliconflow.cn'
-    } else if (res.status === 402 || res.status === 403) {
-      errorMessage = 'Insufficient balance or access denied. Please check your SiliconFlow account.'
+      errorMessage = 'Invalid API key. Please check your OPENROUTER_API_KEY is correct and active at openrouter.ai/keys'
+    } else if (res.status === 402) {
+      errorMessage = 'Insufficient credits. Please add credits to your OpenRouter account at openrouter.ai/credits'
     } else if (res.status === 429) {
       errorMessage = 'Rate limited. Please wait a moment and try again.'
     }
@@ -136,11 +137,13 @@ async function handleVSMode(message: string, history: ChatMessage[], models: str
   
   const results = await Promise.all(models.map(async (modelId) => {
     try {
-      const res = await fetch(API_BASE_URL, {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getApiKey()}`,
           'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://guru-chat.vercel.app',
+          'X-Title': 'Guru Chat VS'
         },
         body: JSON.stringify({
           model: modelId,
@@ -181,11 +184,13 @@ async function handleStackMode(message: string, history: ChatMessage[], models: 
 
   for (const modelId of models) {
     try {
-      const res = await fetch(API_BASE_URL, {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getApiKey()}`,
           'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://guru-chat.vercel.app',
+          'X-Title': 'Guru Chat Stack'
         },
         body: JSON.stringify({
           model: modelId,
