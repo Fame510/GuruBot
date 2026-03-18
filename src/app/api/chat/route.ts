@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server'
 const getApiKey = () => {
   const key = process.env.OPENROUTER_API_KEY
   if (!key) {
-    throw new Error('OPENROUTER_API_KEY not configured')
+    throw new Error('OPENROUTER_API_KEY is not set. Please add it in the Vars section (settings button in top right).')
+  }
+  // OpenRouter keys should start with sk-or-v1-
+  if (!key.startsWith('sk-or-')) {
+    throw new Error('Invalid API key format. OpenRouter keys should start with "sk-or-v1-". Please check your key at openrouter.ai/keys')
   }
   return key
 }
@@ -91,8 +95,26 @@ async function handleSingleMode(message: string, history: ChatMessage[], model: 
 
   if (!res.ok) {
     const err = await res.text()
-    console.error('OpenRouter error:', err)
-    return NextResponse.json({ success: false, error: `API error: ${res.status}` }, { status: 500 })
+    let errorMessage = `OpenRouter API error (${res.status})`
+    try {
+      const errorData = JSON.parse(err)
+      if (errorData.error?.message) {
+        errorMessage = errorData.error.message
+      }
+    } catch {
+      errorMessage = err || errorMessage
+    }
+    
+    // Provide helpful messages for common errors
+    if (res.status === 401) {
+      errorMessage = 'Invalid API key. Please check your OPENROUTER_API_KEY is correct and active at openrouter.ai/keys'
+    } else if (res.status === 402) {
+      errorMessage = 'Insufficient credits. Please add credits to your OpenRouter account at openrouter.ai/credits'
+    } else if (res.status === 429) {
+      errorMessage = 'Rate limited. Please wait a moment and try again.'
+    }
+    
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 })
   }
 
   const data = await res.json()

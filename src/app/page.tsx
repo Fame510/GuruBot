@@ -445,8 +445,10 @@ export default function GuruChat() {
       })
 
       const data = await res.json()
+      console.log('[v0] Chat API response:', { ok: res.ok, status: res.status, data })
 
       if (!res.ok || !data.success) {
+        console.error('[v0] Chat API error:', data)
         throw new Error(data.error || 'Request failed')
       }
 
