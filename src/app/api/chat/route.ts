@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 // API key from environment only - NEVER hardcoded
 const getApiKey = () => {
   const key = process.env.OPENROUTER_API_KEY
+  console.log('[v0] OPENROUTER_API_KEY exists:', !!key)
+  console.log('[v0] OPENROUTER_API_KEY length:', key?.length || 0)
+  console.log('[v0] OPENROUTER_API_KEY prefix:', key?.substring(0, 8) || 'none')
   if (!key) {
     throw new Error('OPENROUTER_API_KEY not configured')
   }
@@ -91,8 +94,9 @@ async function handleSingleMode(message: string, history: ChatMessage[], model: 
 
   if (!res.ok) {
     const err = await res.text()
-    console.error('OpenRouter error:', err)
-    return NextResponse.json({ success: false, error: `API error: ${res.status}` }, { status: 500 })
+    console.error('[v0] OpenRouter error status:', res.status)
+    console.error('[v0] OpenRouter error body:', err)
+    return NextResponse.json({ success: false, error: `API error: ${res.status} - ${err}` }, { status: 500 })
   }
 
   const data = await res.json()
