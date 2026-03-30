@@ -66,10 +66,10 @@ export default function GuruChat() {
   
   // Model selection
   const [models, setModels] = useState<Model[]>([])
-  const [selectedModel, setSelectedModel] = useState<string>('deepseek/deepseek-chat')
+  const [selectedModel, setSelectedModel] = useState<string>('deepseek-ai/DeepSeek-V3')
   const [chatMode, setChatMode] = useState<ChatModeType>('single')
-  const [stackModels, setStackModels] = useState<string[]>(['deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct'])
-  const [vsModels, setVsModels] = useState<string[]>(['deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct'])
+  const [stackModels, setStackModels] = useState<string[]>(['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'])
+  const [vsModels, setVsModels] = useState<string[]>(['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'])
   
   const chatRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)

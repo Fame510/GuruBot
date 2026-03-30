@@ -31,6 +31,10 @@ interface ChatMessage {
   content: string
 }
 
+export async function GET() {
+  return NextResponse.json({ models: FREE_MODELS })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
