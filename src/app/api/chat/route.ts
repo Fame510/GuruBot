@@ -1,25 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { generateText } from 'ai'
 
-const API_BASE_URL = 'https://api.siliconflow.cn/v1/chat/completions'
-
-const getApiKey = () => {
-  // Support both SILICONFLOW_API_KEY and OPENROUTER_API_KEY (for SiliconFlow compatibility)
-  const key = process.env.SILICONFLOW_API_KEY || process.env.OPENROUTER_API_KEY
-  if (!key) {
-    throw new Error('API key not set. Please add SILICONFLOW_API_KEY or OPENROUTER_API_KEY in the Vars section.')
-  }
-  return key
-}
-
+// Available models via Vercel AI Gateway (zero-config)
 export const FREE_MODELS = [
-  { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3', provider: 'DeepSeek', context: 64000 },
-  { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1', provider: 'DeepSeek', context: 64000 },
-  { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen 2.5 72B', provider: 'Alibaba', context: 131072 },
-  { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen Coder 32B', provider: 'Alibaba', context: 131072 },
-  { id: 'meta-llama/Meta-Llama-3.1-8B-Instruct', name: 'Llama 3.1 8B', provider: 'Meta', context: 131072 },
-  { id: 'meta-llama/Meta-Llama-3.1-70B-Instruct', name: 'Llama 3.1 70B', provider: 'Meta', context: 131072 },
-  { id: 'google/gemma-2-9b-it', name: 'Gemma 2 9B', provider: 'Google', context: 8192 },
-  { id: 'mistralai/Mistral-7B-Instruct-v0.2', name: 'Mistral 7B', provider: 'Mistral', context: 32768 },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', context: 128000 },
+  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI', context: 128000 },
+  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'Anthropic', context: 200000 },
+  { id: 'anthropic/claude-haiku-3.5', name: 'Claude Haiku 3.5', provider: 'Anthropic', context: 200000 },
+  { id: 'google/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google', context: 1000000 },
+  { id: 'google/gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google', context: 2000000 },
 ]
 
 interface ChatMessage {
@@ -38,7 +27,7 @@ export async function POST(request: NextRequest) {
     
     const currentMessage = message || prompt
     const conversationHistory: ChatMessage[] = messages || []
-    const selectedModel = model || 'deepseek-ai/DeepSeek-V3'
+    const selectedModel = model || 'openai/gpt-4o-mini'
     
     if (!currentMessage && conversationHistory.length === 0) {
       return NextResponse.json({ success: false, error: 'Message required' }, { status: 400 })
@@ -53,105 +42,111 @@ export async function POST(request: NextRequest) {
     }
 
     return handleSingleMode(currentMessage, conversationHistory, selectedModel)
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message || 'Failed' }, { status: 500 })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed'
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 })
   }
 }
 
 async function handleSingleMode(message: string, history: ChatMessage[], model: string) {
-  const msgs = [
-    { role: 'system' as const, content: 'You are Guru, a helpful AI assistant.' },
-    ...history.slice(-20),
-    ...(message ? [{ role: 'user' as const, content: message.slice(0, 4000) }] : [])
-  ]
+  try {
+    const msgs = [
+      ...history.slice(-20),
+      ...(message ? [{ role: 'user' as const, content: message.slice(0, 4000) }] : [])
+    ]
 
-  const res = await fetch(API_BASE_URL, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${getApiKey()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: msgs, temperature: 0.7, max_tokens: 2000 })
-  })
+    const result = await generateText({
+      model,
+      system: 'You are Guru, a helpful AI assistant.',
+      messages: msgs,
+      maxOutputTokens: 2000,
+    })
 
-  if (!res.ok) {
-    const err = await res.text()
-    let errorMessage = `API error (${res.status})`
-    try { errorMessage = JSON.parse(err).error?.message || errorMessage } catch {}
-    if (res.status === 401) errorMessage = 'Invalid API key.'
+    const response = result.text
+    if (!response) {
+      return NextResponse.json({ success: false, error: 'No response from model' }, { status: 500 })
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      response, 
+      model,
+      modelName: FREE_MODELS.find(m => m.id === model)?.name || model
+    })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'API error'
     return NextResponse.json({ success: false, error: errorMessage }, { status: 500 })
   }
-
-  const data = await res.json()
-  const response = data.choices?.[0]?.message?.content
-  if (!response) return NextResponse.json({ success: false, error: 'No response' }, { status: 500 })
-
-  return NextResponse.json({ 
-    success: true, response, model,
-    modelName: FREE_MODELS.find(m => m.id === model)?.name || model
-  })
 }
 
 async function handleVSMode(message: string, history: ChatMessage[], models: string[]) {
   const results = await Promise.all(models.map(async (modelId) => {
     try {
-      const res = await fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getApiKey()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: modelId,
-          messages: [
-            { role: 'system', content: 'You are Guru, competing against another AI.' },
-            ...history.slice(-10),
-            { role: 'user', content: message.slice(0, 4000) }
-          ],
-          temperature: 0.7, max_tokens: 1500
-        })
+      const result = await generateText({
+        model: modelId,
+        system: 'You are Guru, competing against another AI. Be concise but thorough.',
+        messages: [
+          ...history.slice(-10),
+          { role: 'user' as const, content: message.slice(0, 4000) }
+        ],
+        maxOutputTokens: 1500,
       })
-      if (!res.ok) return { model: modelId, response: null, error: `Error ${res.status}` }
-      const data = await res.json()
+
       return { 
         model: modelId, 
-        response: data.choices?.[0]?.message?.content,
+        response: result.text,
         modelName: FREE_MODELS.find(m => m.id === modelId)?.name || modelId
       }
-    } catch (e: any) {
-      return { model: modelId, response: null, error: e.message }
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error'
+      return { model: modelId, response: null, error: errorMessage, modelName: modelId }
     }
   }))
 
+  const successfulResults = results.filter(r => r.response)
+  
   return NextResponse.json({ 
-    success: true, mode: 'vs',
-    results: results.filter(r => r.response),
+    success: true, 
+    mode: 'vs',
+    results: successfulResults,
     responses: results.map(r => `**${r.modelName}**: ${r.response || r.error}`).join('\n\n---\n\n')
   })
 }
 
 async function handleStackMode(message: string, history: ChatMessage[], models: string[]) {
   let currentResponse = message
-  const chain = []
+  const chain: Array<{ model: string; response: string; modelName: string }> = []
 
   for (const modelId of models) {
     try {
-      const res = await fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getApiKey()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: modelId,
-          messages: [
-            { role: 'system', content: 'Improve and refine the input.' },
-            ...history.slice(-10),
-            { role: 'user', content: currentResponse.slice(0, 4000) }
-          ],
-          temperature: 0.5, max_tokens: 1500
-        })
+      const result = await generateText({
+        model: modelId,
+        system: 'You are an AI that improves and refines the given input. Make it better, clearer, and more helpful.',
+        messages: [
+          ...history.slice(-10),
+          { role: 'user' as const, content: currentResponse.slice(0, 4000) }
+        ],
+        maxOutputTokens: 1500,
       })
-      if (!res.ok) continue
-      const data = await res.json()
-      const resp = data.choices?.[0]?.message?.content
-      if (resp) {
-        currentResponse = resp
-        chain.push({ model: modelId, response: resp, modelName: FREE_MODELS.find(m => m.id === modelId)?.name || modelId })
+
+      if (result.text) {
+        currentResponse = result.text
+        chain.push({ 
+          model: modelId, 
+          response: result.text, 
+          modelName: FREE_MODELS.find(m => m.id === modelId)?.name || modelId 
+        })
       }
-    } catch {}
+    } catch {
+      // Continue to next model in chain
+    }
   }
 
-  return NextResponse.json({ success: true, mode: 'stack', finalResponse: currentResponse, chain, response: currentResponse })
+  return NextResponse.json({ 
+    success: true, 
+    mode: 'stack', 
+    finalResponse: currentResponse, 
+    chain, 
+    response: currentResponse 
+  })
 }
