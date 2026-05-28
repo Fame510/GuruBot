@@ -228,11 +228,3 @@ async function handleStackMode(message: string, history: ChatMessage[], models: 
     response: currentResponse
   })
 }
-
-// GET endpoint to list available models
-export async function GET() {
-  return NextResponse.json({ 
-    success: true, 
-    models: FREE_MODELS 
-  })
-}
