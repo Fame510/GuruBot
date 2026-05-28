@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from 'next/server'
 const API_BASE_URL = 'https://api.siliconflow.cn/v1/chat/completions'
 
 const getApiKey = () => {
-  const key = process.env.SILICONFLOW_API_KEY
+  // Support both SILICONFLOW_API_KEY and OPENROUTER_API_KEY (for SiliconFlow compatibility)
+  const key = process.env.SILICONFLOW_API_KEY || process.env.OPENROUTER_API_KEY
   if (!key) {
-    throw new Error('SILICONFLOW_API_KEY is not set. Please add it in the Vars section.')
+    throw new Error('API key not set. Please add SILICONFLOW_API_KEY or OPENROUTER_API_KEY in the Vars section.')
   }
   return key
 }
