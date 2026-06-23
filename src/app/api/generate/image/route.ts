@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
-import fs from 'fs'
-import path from 'path'
 
-// Use z-ai-web-dev-sdk for image generation
+// Image generation using Pollinations.ai (free, no API key needed)
 export async function POST(request: NextRequest) {
   try {
     const { prompt } = await request.json()
@@ -14,40 +11,18 @@ export async function POST(request: NextRequest) {
 
     console.log('Image request:', prompt.slice(0, 100))
     
-    // Initialize Z-AI SDK
-    const zai = await ZAI.create()
+    // Use Pollinations.ai - free image generation API
+    const encodedPrompt = encodeURIComponent(prompt.slice(0, 500))
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true`
     
-    // Generate image
-    const response = await zai.images.generations.create({
-      prompt: prompt.slice(0, 500),
-      size: '1024x1024'
-    })
+    // Verify the URL works by making a HEAD request
+    const checkRes = await fetch(imageUrl, { method: 'HEAD' })
     
-    // Get base64 image data
-    const base64Data = response.data?.[0]?.base64
-    
-    if (!base64Data) {
-      throw new Error('No image data returned')
+    if (!checkRes.ok) {
+      throw new Error('Image generation service unavailable')
     }
     
-    // Save to a temp file and return URL
-    const filename = `image-${Date.now()}.png`
-    const filepath = path.join(process.cwd(), 'public', 'generated', filename)
-    
-    // Ensure directory exists
-    const dir = path.dirname(filepath)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-    }
-    
-    // Write the base64 data as image file
-    const buffer = Buffer.from(base64Data, 'base64')
-    fs.writeFileSync(filepath, buffer)
-    
-    // Return the public URL
-    const imageUrl = `/generated/${filename}`
-    
-    console.log('Image saved:', imageUrl)
+    console.log('Image URL generated:', imageUrl)
     
     return NextResponse.json({ 
       success: true, 
